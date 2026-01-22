@@ -1,5 +1,6 @@
 static_sites:
   - name: demo-container
+    rootDir: demo-container
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     routes:
