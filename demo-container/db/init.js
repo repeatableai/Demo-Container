@@ -15,35 +15,24 @@ async function initDatabase() {
     console.log('Database connection successful. Server time:', result.rows[0].now);
     
     const sql = fs.readFileSync(join(__dirname, 'init.sql'), 'utf8');
-    // Split by semicolon but handle multi-line statements
-    const statements = sql
-      .split(';')
-      .map(stmt => stmt.trim())
-      .filter(stmt => stmt.length > 0 && !stmt.startsWith('--'));
     
-    for (const statement of statements) {
-      if (statement.trim()) {
-        try {
-          await pool.query(statement);
-        } catch (error) {
-          // Ignore "already exists" errors but log others
-          if (error.message.includes('already exists') || 
-              error.message.includes('duplicate') ||
-              error.message.includes('does not exist')) {
-            // These are expected for idempotent initialization
-            continue;
-          }
-          console.warn('Warning executing statement:', error.message);
-          console.warn('Statement:', statement.substring(0, 100));
-        }
-      }
-    }
+    // Execute the entire SQL file as one query
+    // PostgreSQL supports multiple statements separated by semicolons
+    // This preserves dollar-quoted strings and multi-line statements
+    await pool.query(sql);
     
     console.log('Database initialized successfully');
   } catch (error) {
-    console.error('Error initializing database:', error);
-    console.error('Error details:', error.message);
-    throw error; // Re-throw so server knows init failed
+    // Check if it's a "already exists" error which is fine
+    if (error.message.includes('already exists') || 
+        error.message.includes('duplicate')) {
+      console.log('Database already initialized (tables exist)');
+    } else {
+      console.error('Error initializing database:', error);
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+      throw error; // Re-throw so server knows init failed
+    }
   }
 }
 
