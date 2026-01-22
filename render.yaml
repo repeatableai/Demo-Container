@@ -1,8 +1,8 @@
 static_sites:
   - name: demo-container
     rootDir: demo-container
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    buildCommand: cd demo-container && npm install && npm run build
+    staticPublishPath: demo-container/dist
     routes:
       - type: rewrite
         source: /*
