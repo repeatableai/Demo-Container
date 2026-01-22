@@ -143,7 +143,8 @@ function IframeWithFallback({ src, title, onIframeBlocked, darkMode }) {
 }
 
 export default function AppLauncher() {
-  const [categories, setCategories] = useState(initialCategories);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [adminMode, setAdminMode] = useState(false);
   const [darkMode, setDarkMode] = useState(true);
   const [activeApp, setActiveApp] = useState(null);
@@ -156,10 +157,50 @@ export default function AppLauncher() {
 
   const theme = darkMode ? themes.dark : themes.light;
 
-  const toggleCategory = (categoryId) => {
+  // Fetch categories on mount
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/categories');
+      if (!response.ok) throw new Error('Failed to fetch categories');
+      const data = await response.json();
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      // Fallback to initial categories if API fails
+      setCategories(initialCategories);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleCategory = async (categoryId) => {
+    const category = categories.find(cat => cat.id === categoryId);
+    const newExpanded = !category.expanded;
+    
+    // Optimistically update UI
     setCategories(cats => cats.map(cat => 
-      cat.id === categoryId ? { ...cat, expanded: !cat.expanded } : cat
+      cat.id === categoryId ? { ...cat, expanded: newExpanded } : cat
     ));
+    
+    // Update in database
+    try {
+      await fetch(`/api/categories/${categoryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expanded: newExpanded })
+      });
+    } catch (error) {
+      console.error('Error updating category:', error);
+      // Revert on error
+      setCategories(cats => cats.map(cat => 
+        cat.id === categoryId ? { ...cat, expanded: !newExpanded } : cat
+      ));
+    }
   };
 
   const handleLinkClick = (link) => {
@@ -170,74 +211,165 @@ export default function AppLauncher() {
     }
   };
 
-  const markAsIframeBlocked = (linkId) => {
+  const markAsIframeBlocked = async (linkId) => {
+    // Optimistically update UI
     setCategories(cats => cats.map(cat => ({
       ...cat,
       links: cat.links.map(link => 
         link.id === linkId ? { ...link, iframeCompatible: false } : link
       )
     })));
+    
+    // Update in database
+    try {
+      await fetch(`/api/links/${linkId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ iframe_compatible: false })
+      });
+    } catch (error) {
+      console.error('Error updating link:', error);
+    }
   };
 
-  const addCategory = () => {
+  const addCategory = async () => {
     if (newCategoryName.trim()) {
-      setCategories([...categories, {
-        id: Date.now().toString(),
-        name: newCategoryName.trim(),
-        expanded: true,
-        links: []
-      }]);
-      setNewCategoryName('');
-      setShowAddCategory(false);
+      try {
+        const response = await fetch('/api/categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newCategoryName.trim(), expanded: true })
+        });
+        if (!response.ok) throw new Error('Failed to create category');
+        const newCategory = await response.json();
+        setCategories([...categories, { ...newCategory, links: [] }]);
+        setNewCategoryName('');
+        setShowAddCategory(false);
+      } catch (error) {
+        console.error('Error creating category:', error);
+        alert('Failed to create category');
+      }
     }
   };
 
-  const deleteCategory = (categoryId) => {
+  const deleteCategory = async (categoryId) => {
     if (confirm('Delete this category and all its links?')) {
-      setCategories(cats => cats.filter(cat => cat.id !== categoryId));
+      try {
+        const response = await fetch(`/api/categories/${categoryId}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Failed to delete category');
+        setCategories(cats => cats.filter(cat => cat.id !== categoryId));
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        alert('Failed to delete category');
+      }
     }
   };
 
-  const updateCategoryName = (categoryId, newName) => {
-    setCategories(cats => cats.map(cat =>
-      cat.id === categoryId ? { ...cat, name: newName } : cat
-    ));
-    setEditingCategory(null);
+  const updateCategoryName = async (categoryId, newName) => {
+    try {
+      const response = await fetch(`/api/categories/${categoryId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (!response.ok) throw new Error('Failed to update category');
+      setCategories(cats => cats.map(cat =>
+        cat.id === categoryId ? { ...cat, name: newName } : cat
+      ));
+      setEditingCategory(null);
+    } catch (error) {
+      console.error('Error updating category:', error);
+      alert('Failed to update category');
+    }
   };
 
-  const addLink = (categoryId) => {
+  const addLink = async (categoryId) => {
     if (newLink.name.trim() && newLink.url.trim()) {
-      setCategories(cats => cats.map(cat =>
-        cat.id === categoryId ? {
-          ...cat,
-          links: [...cat.links, { ...newLink, id: Date.now().toString() }]
-        } : cat
-      ));
-      setNewLink({ name: '', url: '', openMode: 'app', iframeCompatible: true });
-      setShowAddLink(null);
+      try {
+        const response = await fetch('/api/links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            category_id: categoryId,
+            name: newLink.name.trim(),
+            url: newLink.url.trim(),
+            open_mode: newLink.openMode,
+            iframe_compatible: newLink.iframeCompatible
+          })
+        });
+        if (!response.ok) throw new Error('Failed to create link');
+        const newLinkData = await response.json();
+        setCategories(cats => cats.map(cat =>
+          cat.id === categoryId ? {
+            ...cat,
+            links: [...cat.links, {
+              id: newLinkData.id,
+              name: newLinkData.name,
+              url: newLinkData.url,
+              openMode: newLinkData.openMode,
+              iframeCompatible: newLinkData.iframeCompatible
+            }]
+          } : cat
+        ));
+        setNewLink({ name: '', url: '', openMode: 'app', iframeCompatible: true });
+        setShowAddLink(null);
+      } catch (error) {
+        console.error('Error creating link:', error);
+        alert('Failed to create link');
+      }
     }
   };
 
-  const deleteLink = (categoryId, linkId) => {
+  const deleteLink = async (categoryId, linkId) => {
     if (confirm('Delete this link?')) {
-      setCategories(cats => cats.map(cat =>
-        cat.id === categoryId ? {
-          ...cat,
-          links: cat.links.filter(link => link.id !== linkId)
-        } : cat
-      ));
+      try {
+        const response = await fetch(`/api/links/${linkId}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Failed to delete link');
+        setCategories(cats => cats.map(cat =>
+          cat.id === categoryId ? {
+            ...cat,
+            links: cat.links.filter(link => link.id !== linkId)
+          } : cat
+        ));
+      } catch (error) {
+        console.error('Error deleting link:', error);
+        alert('Failed to delete link');
+      }
     }
   };
 
-  const updateLink = (categoryId, linkId, updates) => {
-    setCategories(cats => cats.map(cat =>
-      cat.id === categoryId ? {
-        ...cat,
-        links: cat.links.map(link =>
-          link.id === linkId ? { ...link, ...updates } : link
-        )
-      } : cat
-    ));
+  const updateLink = async (categoryId, linkId, updates) => {
+    try {
+      const updateData = {
+        name: updates.name,
+        url: updates.url,
+        open_mode: updates.openMode,
+        iframe_compatible: updates.iframeCompatible
+      };
+      
+      const response = await fetch(`/api/links/${linkId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+      if (!response.ok) throw new Error('Failed to update link');
+      
+      setCategories(cats => cats.map(cat =>
+        cat.id === categoryId ? {
+          ...cat,
+          links: cat.links.map(link =>
+            link.id === linkId ? { ...link, ...updates } : link
+          )
+        } : cat
+      ));
+    } catch (error) {
+      console.error('Error updating link:', error);
+      alert('Failed to update link');
+    }
   };
 
   return (
@@ -276,7 +408,12 @@ export default function AppLauncher() {
 
         {/* Categories */}
         <div className="flex-1 overflow-y-auto p-2">
-          {categories.map(category => (
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader size={24} className="text-blue-500 animate-spin" />
+            </div>
+          ) : (
+            categories.map(category => (
             <div key={category.id} className="mb-1">
               {/* Category Header */}
               <div className="group flex items-center">
@@ -431,7 +568,7 @@ export default function AppLauncher() {
                 </div>
               )}
             </div>
-          ))}
+          )))}
 
           {/* Add Category */}
           {adminMode && (
