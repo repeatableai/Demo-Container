@@ -135,6 +135,7 @@ function IframeWithFallback({ src, title, onIframeBlocked, darkMode }) {
         className={`absolute inset-0 w-full h-full border-0 ${loading ? 'opacity-0' : 'opacity-100'}`}
         title={title}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
+        allow="microphone; camera; screen-wake-lock; geolocation; autoplay; fullscreen"
         onLoad={handleLoad}
         onError={handleError}
       />
