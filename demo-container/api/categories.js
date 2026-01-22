@@ -32,7 +32,8 @@ router.get('/', async (req, res) => {
     res.json(categoriesWithLinks);
   } catch (error) {
     console.error('Error fetching categories:', error);
-    res.status(500).json({ error: 'Failed to fetch categories' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to fetch categories', details: error.message });
   }
 });
 

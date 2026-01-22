@@ -25,7 +25,8 @@ router.post('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating link:', error);
-    res.status(500).json({ error: 'Failed to create link' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to create link', details: error.message });
   }
 });
 

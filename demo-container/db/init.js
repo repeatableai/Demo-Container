@@ -8,8 +8,12 @@ const __dirname = dirname(__filename);
 
 async function initDatabase() {
   try {
+    // Test connection first
+    await pool.query('SELECT NOW()');
+    console.log('Database connection successful');
+    
     const sql = fs.readFileSync(join(__dirname, 'init.sql'), 'utf8');
-    // PostgreSQL uses semicolons differently, split by statement boundaries
+    // Split by semicolon but handle multi-line statements
     const statements = sql
       .split(';')
       .map(stmt => stmt.trim())
@@ -20,10 +24,15 @@ async function initDatabase() {
         try {
           await pool.query(statement);
         } catch (error) {
-          // Ignore "already exists" errors
-          if (!error.message.includes('already exists') && !error.message.includes('duplicate')) {
-            console.warn('Warning executing statement:', error.message);
+          // Ignore "already exists" errors but log others
+          if (error.message.includes('already exists') || 
+              error.message.includes('duplicate') ||
+              error.message.includes('does not exist')) {
+            // These are expected for idempotent initialization
+            continue;
           }
+          console.warn('Warning executing statement:', error.message);
+          console.warn('Statement:', statement.substring(0, 100));
         }
       }
     }
@@ -31,8 +40,8 @@ async function initDatabase() {
     console.log('Database initialized successfully');
   } catch (error) {
     console.error('Error initializing database:', error);
-    // Don't throw - allow server to start even if init fails
-    console.log('Continuing without database initialization...');
+    console.error('Error details:', error.message);
+    throw error; // Re-throw so server knows init failed
   }
 }
 

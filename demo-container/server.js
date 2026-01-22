@@ -24,11 +24,6 @@ app.use((req, res, next) => {
 app.use('/api/categories', categoriesRouter);
 app.use('/api/links', linksRouter);
 
-// Initialize database on startup
-initDatabase().catch(err => {
-  console.error('Failed to initialize database:', err);
-});
-
 // Serve static files from the dist directory
 app.use(express.static(join(__dirname, 'dist')));
 
@@ -38,6 +33,22 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+
+// Initialize database and then start server
+async function startServer() {
+  try {
+    console.log('Initializing database...');
+    await initDatabase();
+    console.log('Database initialized successfully');
+    
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    console.error('Error details:', error.message);
+    process.exit(1);
+  }
+}
+
+startServer();
