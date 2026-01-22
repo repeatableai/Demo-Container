@@ -4,11 +4,25 @@ const { Pool } = pg;
 // Parse DATABASE_URL if provided (Render's format)
 let poolConfig;
 if (process.env.DATABASE_URL) {
-  // Use DATABASE_URL directly - pg library can parse it
+  // Render PostgreSQL connection strings sometimes need port appended
+  let connectionString = process.env.DATABASE_URL;
+  
+  // If connection string doesn't have a port, add default PostgreSQL port
+  if (!connectionString.includes(':5432') && !connectionString.match(/:\d+\//)) {
+    // Check if it's missing port entirely
+    const match = connectionString.match(/@([^:]+)\/(.+)$/);
+    if (match) {
+      // Insert port before database name
+      connectionString = connectionString.replace(/@([^:]+)\//, '@$1:5432/');
+    }
+  }
+  
   poolConfig = {
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connectionString,
     ssl: { rejectUnauthorized: false }
   };
+  
+  console.log('Using DATABASE_URL for connection (host masked)');
 } else {
   // Fallback to individual environment variables
   poolConfig = {
@@ -19,9 +33,26 @@ if (process.env.DATABASE_URL) {
     port: process.env.DB_PORT || process.env.POSTGRES_PORT || 5432,
     ssl: false
   };
+  
+  console.log('Using individual environment variables for connection');
 }
 
-// Create connection pool
+// Create connection pool with error handling
 const pool = new Pool(poolConfig);
+
+// Handle pool errors
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+});
+
+// Test connection on startup
+pool.query('SELECT NOW()')
+  .then(() => {
+    console.log('Database pool created successfully');
+  })
+  .catch((err) => {
+    console.error('Failed to create database pool:', err.message);
+    console.error('DATABASE_URL present:', !!process.env.DATABASE_URL);
+  });
 
 export default pool;
