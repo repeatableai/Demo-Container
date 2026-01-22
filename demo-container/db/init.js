@@ -9,8 +9,10 @@ const __dirname = dirname(__filename);
 async function initDatabase() {
   try {
     // Test connection first
-    await pool.query('SELECT NOW()');
-    console.log('Database connection successful');
+    console.log('Testing database connection...');
+    console.log('DATABASE_URL present:', !!process.env.DATABASE_URL);
+    const result = await pool.query('SELECT NOW()');
+    console.log('Database connection successful. Server time:', result.rows[0].now);
     
     const sql = fs.readFileSync(join(__dirname, 'init.sql'), 'utf8');
     // Split by semicolon but handle multi-line statements

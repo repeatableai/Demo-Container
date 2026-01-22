@@ -20,6 +20,27 @@ app.use((req, res, next) => {
   next();
 });
 
+// Health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    const pool = (await import('./db/connection.js')).default;
+    await pool.query('SELECT NOW()');
+    res.json({ 
+      status: 'ok', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      database: 'disconnected',
+      error: error.message,
+      hasDatabaseUrl: !!process.env.DATABASE_URL
+    });
+  }
+});
+
 // API routes (must come before static file serving)
 app.use('/api/categories', categoriesRouter);
 app.use('/api/links', linksRouter);
