@@ -84,6 +84,7 @@ function IframeWithFallback({ src, title, onIframeBlocked, darkMode }) {
     };
   }, [src]);
 
+
   const handleLoad = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setLoading(false);
@@ -134,7 +135,7 @@ function IframeWithFallback({ src, title, onIframeBlocked, darkMode }) {
         src={src}
         className={`absolute inset-0 w-full h-full border-0 ${loading ? 'opacity-0' : 'opacity-100'}`}
         title={title}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-top-navigation"
         allow="microphone; camera; screen-wake-lock; geolocation; autoplay; fullscreen"
         onLoad={handleLoad}
         onError={handleError}
@@ -619,6 +620,32 @@ export default function AppLauncher() {
             <div className={`absolute top-0 left-0 right-0 h-10 ${theme.navBg} border-b ${theme.border} flex items-center justify-between px-3 z-10`}>
               <span className={`font-medium text-sm ${theme.text}`}>{activeApp.name}</span>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const popup = window.open(
+                      activeApp.url,
+                      'auth-popup',
+                      'width=1200,height=800,scrollbars=yes,resizable=yes'
+                    );
+                    if (popup) {
+                      // Reload iframe when popup closes (user completes auth)
+                      const checkPopup = setInterval(() => {
+                        if (popup.closed) {
+                          clearInterval(checkPopup);
+                          // Reload iframe to pick up authentication
+                          const iframe = document.querySelector('iframe[title="' + activeApp.name + '"]');
+                          if (iframe) {
+                            iframe.src = iframe.src;
+                          }
+                        }
+                      }, 500);
+                    }
+                  }}
+                  className={`px-2 py-1 text-xs ${theme.buttonBg} rounded ${theme.textMuted} hover:${theme.activeBg} hover:text-white transition-colors`}
+                  title="Open in popup for authentication"
+                >
+                  Authenticate
+                </button>
                 <button
                   onClick={() => window.open(activeApp.url, '_blank')}
                   className={`p-1.5 ${theme.buttonBg} rounded ${theme.textMuted}`}
